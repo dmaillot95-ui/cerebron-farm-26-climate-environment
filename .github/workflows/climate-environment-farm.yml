@@ -37,7 +37,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install gradio_client
+      - run: pip install -q hf-gradio
       - name: Run external AI role
         env:
           ROLE: ${{ matrix.role }}
@@ -66,17 +66,11 @@ jobs:
           for p in pathlib.Path('downloaded').glob('*.json'):
               try: rows.append(json.loads(p.read_text()))
               except Exception: pass
-          ok=[r for r in rows if r.get('success')]
-          out={
-            'roles_received':len(rows),
-            'successful_external_ai_calls':len(ok),
-            'model_families':sorted({r.get('model') for r in ok if r.get('model')}),
-            'status':'UNREVIEWED_EXTERNAL_AGENT_OUTPUT',
-            'results':rows
-          }
+          ok=[r for r in rows if r.get('inference_success')]
+          out={'roles_received':len(rows),'successful_external_ai_calls':len(ok),'failed_external_ai_calls':len(rows)-len(ok),'model_families':sorted({r.get('model') for r in rows if r.get('model')}),'status':'UNREVIEWED_EXTERNAL_AGENT_OUTPUT','results':rows}
           pathlib.Path('omega').mkdir(exist_ok=True)
           pathlib.Path('omega/packet.json').write_text(json.dumps(out,ensure_ascii=False,indent=2))
-          print(json.dumps({k:out[k] for k in ['roles_received','successful_external_ai_calls','model_families','status']}))
+          print(json.dumps({k:out[k] for k in ['roles_received','successful_external_ai_calls','failed_external_ai_calls','model_families','status']}))
           PY
       - uses: actions/upload-artifact@v4
         with:
