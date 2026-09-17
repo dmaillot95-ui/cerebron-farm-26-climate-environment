@@ -1,0 +1,84 @@
+name: CEREBRON Farm 26 Climate Environment
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  agents:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {role: CLIMATE_SYSTEMS_SPECIALIST, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: ATMOSPHERIC_SCIENCE_SPECIALIST, model: huggingface-projects/gemma-2-9b-it}
+          - {role: OCEAN_CLIMATE_SPECIALIST, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: HYDROLOGY_WATER_SPECIALIST, model: huggingface-projects/gemma-2-9b-it}
+          - {role: CARBON_CYCLE_SPECIALIST, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: BIODIVERSITY_ECOSYSTEM_SPECIALIST, model: huggingface-projects/gemma-2-9b-it}
+          - {role: SOIL_LAND_USE_SPECIALIST, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: AIR_POLLUTION_SPECIALIST, model: huggingface-projects/gemma-2-9b-it}
+          - {role: WATER_POLLUTION_SPECIALIST, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: WASTE_CIRCULARITY_SPECIALIST, model: huggingface-projects/gemma-2-9b-it}
+          - {role: NATURAL_RESOURCES_SPECIALIST, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: CLIMATE_RISK_SPECIALIST, model: huggingface-projects/gemma-2-9b-it}
+          - {role: ADAPTATION_SPECIALIST, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: MITIGATION_SPECIALIST, model: huggingface-projects/gemma-2-9b-it}
+          - {role: LCA_CARBON_ACCOUNTING_AUDITOR, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: REMOTE_SENSING_ENV_DATA_SPECIALIST, model: huggingface-projects/gemma-2-9b-it}
+          - {role: MODEL_UNCERTAINTY_AUDITOR, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: RED_TEAM_FALSIFIER, model: huggingface-projects/gemma-2-9b-it}
+          - {role: INDEPENDENT_REPLICATOR, model: huggingface-projects/llama-3.2-3B-Instruct}
+          - {role: OMEGA_CLIMATE_ENVIRONMENT_JUDGE, model: huggingface-projects/gemma-2-9b-it}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install gradio_client
+      - name: Run external AI role
+        env:
+          ROLE: ${{ matrix.role }}
+          MODEL: ${{ matrix.model }}
+        run: python worker/agent.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-${{ matrix.role }}
+          path: results/${{ matrix.role }}.json
+
+  omega:
+    if: always()
+    needs: agents
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: agent-*
+          path: downloaded
+          merge-multiple: true
+      - name: Fuse evidence packet
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          rows=[]
+          for p in pathlib.Path('downloaded').glob('*.json'):
+              try: rows.append(json.loads(p.read_text()))
+              except Exception: pass
+          ok=[r for r in rows if r.get('success')]
+          out={
+            'roles_received':len(rows),
+            'successful_external_ai_calls':len(ok),
+            'model_families':sorted({r.get('model') for r in ok if r.get('model')}),
+            'status':'UNREVIEWED_EXTERNAL_AGENT_OUTPUT',
+            'results':rows
+          }
+          pathlib.Path('omega').mkdir(exist_ok=True)
+          pathlib.Path('omega/packet.json').write_text(json.dumps(out,ensure_ascii=False,indent=2))
+          print(json.dumps({k:out[k] for k in ['roles_received','successful_external_ai_calls','model_families','status']}))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: climate-environment-omega-packet
+          path: omega/packet.json
